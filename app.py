@@ -48,7 +48,7 @@ def home():
     courses = Course.query.all()
 
     # Render the Jinja template and pass the courses data to the template
-    return render_template('courses.html', courses=courses)
+    return render_template('index.html', courses=courses)
 
 
 @app.route('/mycourse/<int:course_id>')
@@ -67,26 +67,40 @@ def mycourse(course_id):
 
 
 
+@app.route('/delete-course/<int:course_id>', methods=['DELETE'])
+def delete_course(course_id):
+    # Find the course by ID
+    course = Course.query.get(course_id)
+    
+    if not course:
+        return jsonify({"error": "Course not found"}), 404
+
+    # Delete the course from the database
+    db.session.delete(course)
+    db.session.commit()
+
+    return jsonify({"success": True, "message": "Course deleted successfully!"})
 
 
 
 
 
-@app.route('/create_course', methods=['POST'])
+@app.route('/create-course', methods=['POST'])
 def create_course():
-    data = request.json
-    title = data.get('title')
-    description = data.get('description')
-
-    if not title or not description:
+    data = request.get_json()
+    if not data or 'title' not in data or 'description' not in data:
         return jsonify({"error": "Title and description are required."}), 400
 
-    course = Course(title=title, description=description)
+    # Simulate saving the course to the database
+    course = Course(title=data['title'], description=data['description'])
     db.session.add(course)
     db.session.commit()
-    return jsonify({"message": "Course created successfully!", "course_id": course.id})
 
-@app.route('/create_slide/<int:course_id>', methods=['POST'])
+    return jsonify({"success": True, "course_id": course.id})
+
+
+
+@app.route('/create-slide/<int:course_id>', methods=['POST'])
 def create_slide(course_id):
     course = Course.query.get(course_id)
     if not course:
@@ -139,7 +153,7 @@ def create_slide(course_id):
         "media_url": media_url if media_url else local_file_path
     })
 
-@app.route('/delete_slide/<int:slide_id>', methods=['DELETE'])
+@app.route('/delete-slide/<int:slide_id>', methods=['DELETE'])
 def delete_slide(slide_id):
     # Fetch the slide from the database by ID
     slide = Slide.query.get(slide_id)
@@ -156,7 +170,7 @@ def delete_slide(slide_id):
 
 
 # Route to edit a slide
-@app.route('/edit_slide/<int:slide_id>', methods=['PUT'])
+@app.route('/edit-slide/<int:slide_id>', methods=['PUT'])
 def edit_slide(slide_id):
     slide = Slide.query.get(slide_id)
 
@@ -199,7 +213,7 @@ def edit_slide(slide_id):
 
 
 
-@app.route('/get_course/<int:course_id>', methods=['GET'])
+@app.route('/get-course/<int:course_id>', methods=['GET'])
 def get_course(course_id):
     course = Course.query.get(course_id)
     if not course:
@@ -213,7 +227,7 @@ def get_course(course_id):
         "slides": slides
     })
 
-@app.route('/preview_slides/<int:course_id>', methods=['GET'])
+@app.route('/preview-slides/<int:course_id>', methods=['GET'])
 def preview_slides(course_id):
     course = Course.query.get(course_id)
     if not course:

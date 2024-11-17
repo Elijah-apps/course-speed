@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ course.title }} - Slide Editor</title>
+
+    <!-- Updated CDNs -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Modern CKEditor 5 -->
+    <script src="https://cdn.ckeditor.com/ckeditor5/41.1.0/classic/ckeditor.js"></script>
+
+    <!-- Latest Fabric.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+
+    <style>
+        :root {
+            --sidebar-width: 250px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            height: 100vh;
+            position: fixed;
+            right: 0;
+            top: 0;
+            background: #f8f9fa;
+            border-left: 1px solid #dee2e6;
+            padding: 1rem;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .main-content {
+            margin-right: var(--sidebar-width);
+            padding: 2rem;
+        }
+
+        .editor-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .editor-box {
+            flex: 1 1 calc(50% - 1rem);
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 1rem;
+            min-width: 300px;
+        }
+
+        .canvas-container {
+            width: 100% !important;
+            height: 400px !important;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            position: relative;
+        }
+
+        .media-preview {
+            max-width: 100%;
+            margin-top: 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            overflow: hidden;
+            min-height: 100px;
+        }
+
+        .media-preview img, 
+        .media-preview video {
+            max-width: 100%;
+            max-height: 300px;
+            display: block;
+            margin: 0 auto;
+            object-fit: contain;
+        }
+
+        .preview-container {
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-top: 1rem;
+        }
+
+        /* CKEditor 5 specific styles */
+        .ck-editor__editable {
+            min-height: 200px;
+            max-height: 400px;
+        }
+
+        .btn-group .btn.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+
+        .d-none {
+            display: none !important;
+        }
+
+        /* Loading indicator */
+        .loading {
+            position: relative;
+        }
+
+        .loading::after {
+            content: 'Loading...';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.8);
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-content">
+        <h3 class="mb-4">Course Title: {{ course.title }}</h3>
+
+        <div class="editor-container">
+            <!-- Slide Editor -->
+            <div class="editor-box">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h4 class="m-0">Slide Content</h4>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-outline-primary toggle-btn active" data-view="editor-view">Text</button>
+                        <button class="btn btn-outline-primary toggle-btn" data-view="canvas-view">Canvas</button>
+                        <button class="btn btn-outline-primary toggle-btn" data-view="media-view">Media</button>
+                    </div>
+                </div>
+
+                <div id="editor-view" class="content-view">
+                    <div id="slideContent"></div>
+                </div>
+                <div id="canvas-view" class="content-view d-none">
+                    <canvas id="slideCanvas"></canvas>
+                    <div class="btn-group mt-3">
+                        <button class="btn btn-sm btn-outline-secondary" id="addRect">Add Rectangle</button>
+                        <button class="btn btn-sm btn-outline-secondary" id="addCircle">Add Circle</button>
+                        <button class="btn btn-sm btn-outline-secondary" id="addText">Add Text</button>
+                        <button class="btn btn-sm btn-outline-danger" id="deleteSelected">Delete Selected</button>
+                    </div>
+                </div>
+                <div id="media-view" class="content-view d-none">
+                    <input type="file" class="form-control mb-3" id="mediaInput" accept="image/*,video/*">
+                    <div id="mediaPreview" class="media-preview"></div>
+                    <button class="btn btn-outline-primary w-100 mt-3" id="uploadMedia">Upload Media</button>
+                </div>
+            </div>
+
+            <!-- Slide Transcript -->
+            <div class="editor-box">
+                <h4>Slide Transcript</h4>
+                <div id="slideTranscript"></div>
+            </div>
+        </div>
+
+        <button id="saveSlide" class="btn btn-primary">Save Slide</button>
+    </div>
+
+    <div class="sidebar">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5>Slides</h5>
+            <button class="btn btn-sm btn-primary">New Slide</button>
+        </div>
+
+        <div id="slideList">
+            {% if slides %}
+                {% for slide in slides %}
+                    <div class="p-2 border mb-2">{{ slide.content }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // CKEditor 5 Initialization
+        Promise.all([
+            ClassicEditor.create(document.querySelector('#slideContent')),
+            ClassicEditor.create(document.querySelector('#slideTranscript'))
+        ]).then(([contentEditor, transcriptEditor]) => {
+            window.contentEditor = contentEditor;
+            window.transcriptEditor = transcriptEditor;
+        }).catch(error => {
+            console.error('CKEditor initialization failed:', error);
+        });
+
+        // Toggle Functionality
+        const toggleButtons = document.querySelectorAll('.toggle-btn');
+        const contentViews = document.querySelectorAll('.content-view');
+
+        toggleButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                contentViews.forEach(view => view.classList.add('d-none'));
+                const targetView = document.getElementById(button.dataset.view);
+                targetView.classList.remove('d-none');
+                toggleButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+            });
+        });
+
+        // Fabric.js Canvas Initialization
+        const canvas = new fabric.Canvas('slideCanvas', {
+            width: 600,
+            height: 400,
+            backgroundColor: '#ffffff'
+        });
+
+        // Canvas Controls
+        document.getElementById('addRect').addEventListener('click', () => {
+            const rect = new fabric.Rect({
+                left: 100,
+                top: 100,
+                fill: '#f0f0f0',
+                width: 100,
+                height: 100,
+                stroke: '#000000',
+                strokeWidth: 1
+            });
+            canvas.add(rect);
+            canvas.setActiveObject(rect);
+        });
+
+        document.getElementById('addCircle').addEventListener('click', () => {
+            const circle = new fabric.Circle({
+                left: 100,
+                top: 100,
+                fill: '#f0f0f0',
+                radius: 50,
+                stroke: '#000000',
+                strokeWidth: 1
+            });
+            canvas.add(circle);
+            canvas.setActiveObject(circle);
+        });
+
+        document.getElementById('addText').addEventListener('click', () => {
+            const text = new fabric.IText('Double click to edit', {
+                left: 100,
+                top: 100,
+                fill: '#000000',
+                fontSize: 20
+            });
+            canvas.add(text);
+            canvas.setActiveObject(text);
+        });
+
+        document.getElementById('deleteSelected').addEventListener('click', () => {
+            const activeObject = canvas.getActiveObject();
+            if (activeObject) {
+                canvas.remove(activeObject);
+                canvas.requestRenderAll();
+            }
+        });
+
+        // Media Preview Functionality
+        const mediaInput = document.getElementById('mediaInput');
+        const mediaPreview = document.getElementById('mediaPreview');
+        const uploadButton = document.getElementById('uploadMedia');
+
+        mediaInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            mediaPreview.innerHTML = '';
+            mediaPreview.classList.add('loading');
+
+            reader.onload = function(e) {
+                mediaPreview.classList.remove('loading');
+                if (file.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        mediaPreview.appendChild(img);
+                    };
+                } else if (file.type.startsWith('video/')) {
+                    const video = document.createElement('video');
+                    video.src = e.target.result;
+                    video.controls = true;
+                    video.onloadedmetadata = () => {
+                        mediaPreview.appendChild(video);
+                    };
+                }
+            };
+
+            reader.onerror = function() {
+                mediaPreview.classList.remove('loading');
+                mediaPreview.innerHTML = '<div class="alert alert-danger">Error loading file</div>';
+            };
+
+            reader.readAsDataURL(file);
+        });
+
+        // Save functionality
+        document.getElementById('saveSlide').addEventListener('click', function() {
+            const slideData = {
+                content: window.contentEditor.getData(),
+                transcript: window.transcriptEditor.getData(),
+                canvas: canvas.toJSON(),
+                media: mediaPreview.innerHTML
+            };
+
+            // Add your save logic here
+            console.log('Saving slide data:', slideData);
+            // Example:
+            // fetch('/api/slides', {
+            //     method: 'POST',
+            //     headers: {
+            //         'Content-Type': 'application/json',
+            //     },
+            //     body: JSON.stringify(slideData)
+            // });
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const canvasContainer = document.querySelector('.canvas-container');
+            if (canvasContainer) {
+                canvas.setDimensions({
+                    width: canvasContainer.offsetWidth,
+                    height: canvasContainer.offsetHeight
+                });
+                canvas.requestRenderAll();
+            }
+        });
+    </script>
+</body>
+
+</html>
